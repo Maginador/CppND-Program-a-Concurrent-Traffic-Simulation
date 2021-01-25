@@ -13,10 +13,11 @@ T MessageQueue<T>::receive()
     // FP.5a : The method receive should use std::unique_lock<std::mutex> and _condition.wait() 
     // to wait for and receive new messages and pull them from the queue using move semantics. 
     // The received object should then be returned by the receive function. 
-    std::unique_lock<std::mutex> ul(mtx);
-    condition.wait(ul,[this]{return !_queue.empty();});
-    T msg = std::move(_queue.back());
-    _queue.pop_back();
+   std::unique_lock<std::mutex> uLock(mtx);
+    condition.wait(uLock, [this] { return !_queue.empty(); });
+
+    T msg = std::move(_queue.front());
+    _queue.pop_front();
     return msg;
 }
 
@@ -25,8 +26,8 @@ void MessageQueue<T>::send(T &&msg)
 {
     // FP.4a : The method send should use the mechanisms std::lock_guard<std::mutex> 
     // as well as _condition.notify_one() to add a new message to the queue and afterwards send a notification.
-    std::lock_guard<std::mutex> l(mtx);
-    _queue.emplace_back(std::move(msg));
+    std::lock_guard<std::mutex> uLock(mtx);
+    _queue.push_back(std::move(msg));
     condition.notify_one();
 }
 
@@ -38,6 +39,7 @@ TrafficLight::TrafficLight()
 {
     _currentPhase = TrafficLightPhase::red;
 }
+
 
 void TrafficLight::waitForGreen()
 {
@@ -72,18 +74,16 @@ void TrafficLight::cycleThroughPhases()
     // and toggles the current phase of the traffic light between red and green and sends an update method 
     // to the message queue using move semantics. The cycle duration should be a random value between 4 and 6 seconds. 
     // Also, the while-loop should use std::this_thread::sleep_for to wait 1ms between two cycles.
-    int cycleTime = std::rand() %3 + 4;
+    int cycleTime = std::rand() %3 + 4 * 1000;
     auto currentTime = std::chrono::system_clock::now();
     while(true){
         
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
-         auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - currentTime);
-        
-        if(elapsedTime.count() <=cycleTime){
-        
+        auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - currentTime);
+        if(elapsedTime.count() >=cycleTime){
+
         currentTime = std::chrono::system_clock::now();
-        cycleTime = std::rand() %3 + 4;
-        std::cout << cycleTime;
+        cycleTime = (std::rand() %3 + 4) * 1000;
         _currentPhase = _currentPhase == TrafficLightPhase::green ? TrafficLightPhase::red : TrafficLightPhase::green;
         messageQ.send(std::move(_currentPhase));
         }
